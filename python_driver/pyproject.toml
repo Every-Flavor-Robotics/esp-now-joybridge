@@ -1,0 +1,10 @@
+[project]
+name = "esp-now-transponder-python"
+version = "0.1.0"
+description = "Python interface for using a USB dongle as an ESP-NOW transponder"
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+    "pygame>=2.6.1",
+    "pyserial>=3.5",
+]

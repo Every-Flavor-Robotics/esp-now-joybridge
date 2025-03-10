@@ -130,6 +130,7 @@ void OnDataRecv(const esp_now_recv_info *recv_info, const uint8_t *incomingData,
     }
   }
 }
+
 // --- Serial State Machine Definitions ---
 // We now have three states:
 //   WAIT_FOR_HEADER: Look for the "STAR" header
@@ -143,8 +144,14 @@ enum SerialState
 };
 
 SerialState serialState = WAIT_FOR_HEADER;
-const unsigned long TIMEOUT_MS = 100;  // Timeout in milliseconds
+bool serialInitialized = false;
+const unsigned long TIMEOUT_MS =
+    100;  // Timeout for the state machine in milliseconds
 unsigned long lastByteTime = 0;
+
+// Global watchdog timeout for the serial link (e.g., 5000 ms)
+const unsigned long DISCONNECT_TIMEOUT = 5000;
+unsigned long lastMessageTime = 0;
 
 const int HEADER_SIZE = 4;
 char headerBuffer[HEADER_SIZE];
@@ -157,6 +164,8 @@ const int MAX_PAYLOAD_SIZE =
 uint8_t payloadBuffer[MAX_PAYLOAD_SIZE];
 int payloadIndex = 0;
 
+// --- Process Serial Data ---
+
 void processSerial()
 {
   // Process all available bytes from Serial
@@ -164,6 +173,7 @@ void processSerial()
   {
     char inByte = Serial.read();
     lastByteTime = millis();
+    lastMessageTime = millis();  // Update global watchdog timer
 
     switch (serialState)
     {
@@ -173,7 +183,7 @@ void processSerial()
         {
           if (memcmp(headerBuffer, "STAR", HEADER_SIZE) == 0)
           {
-            // Serial.println("Header found");
+            // Header found; move to read message type state
             serialState = READ_MSG_TYPE;
           }
           else
@@ -199,13 +209,10 @@ void processSerial()
         }
         else
         {
-          //   Serial.println("Unknown message type");
           serialState = WAIT_FOR_HEADER;
           headerIndex = 0;
           break;
         }
-        // Serial.print("Message type: ");
-        // Serial.println(messageType, HEX);
         serialState = READ_PAYLOAD;
         payloadIndex = 0;
         break;
@@ -220,21 +227,35 @@ void processSerial()
             memcpy(&joystick, payloadBuffer, payloadLength);
             for (int i = 0; i < clientCount; i++)
             {
-              //   Serial.println("Sending joystick data to client");
               esp_now_send(registeredClients[i], (uint8_t *)&joystick,
                            sizeof(joystick));
             }
           }
           else if (messageType == 0x02)
           {
-            InitSerial init;
-            memcpy(&init, payloadBuffer, payloadLength);
-            // Serial.println("Init message received:");
-            // Serial.println(init.service_name);
+            if (!serialInitialized)
+            {
+              serialInitialized = true;
 
-            // Send back the init response exactly
-            // Write the InitSerial struct to the serial port
-            Serial.write((uint8_t *)&init, sizeof(init));
+              InitSerial init;
+              memcpy(&init, payloadBuffer, payloadLength);
+
+              //   Write the init message back to the serial port to finish
+              //   handshake
+              Serial.write((uint8_t *)&init, sizeof(init));
+            }
+            else
+            {
+              // We received an initialization message, when we didn't expect
+              // one. Reboot the ESP to resync
+              pixels.setPixelColor(0, pixels.Color(0, 255, 255));
+              pixels.setBrightness(255);
+              pixels.show();
+
+              delay(1000);
+
+              ESP.restart();
+            }
           }
           // Reset the state machine for the next packet.
           serialState = WAIT_FOR_HEADER;
@@ -244,8 +265,7 @@ void processSerial()
     }
   }
 
-  // Timeout handling: If no new data arrives within TIMEOUT_MS, reset the state
-  // machine.
+  // Timeout handling for the serial state machine.
   if ((millis() - lastByteTime) > TIMEOUT_MS)
   {
     serialState = WAIT_FOR_HEADER;
@@ -256,6 +276,7 @@ void processSerial()
 
 void setup()
 {
+  delay(100);
   Serial.begin(115200);
 
 #ifdef NEOPIXEL_ENABLED
@@ -291,7 +312,6 @@ void setup()
     return;
   }
 
-  delay(5000);
   Serial.println("Setup complete");
 }
 
@@ -301,10 +321,28 @@ void loop()
   // Process incoming serial data using our state machine
   processSerial();
 
-  if (millis() - lastBroadcastTime >= 3000)
+  if (serialInitialized)
   {
-    esp_now_send((uint8_t *)"\xFF\xFF\xFF\xFF\xFF\xFF",
-                 (uint8_t *)&announcement, sizeof(announcement));
-    lastBroadcastTime = millis();
+    // Global watchdog: if no valid message is received for DISCONNECT_TIMEOUT,
+    // reboot the ESP32.
+    if ((millis() - lastMessageTime) > DISCONNECT_TIMEOUT)
+    {
+      Serial.println("No message received for a while. Rebooting ESP32...");
+      delay(100);
+
+      pixels.setPixelColor(0, pixels.Color(0, 255, 255));
+      pixels.setBrightness(255);
+      pixels.show();
+
+      delay(1000);
+      ESP.restart();
+    }
+
+    if (millis() - lastBroadcastTime >= 3000)
+    {
+      esp_now_send((uint8_t *)"\xFF\xFF\xFF\xFF\xFF\xFF",
+                   (uint8_t *)&announcement, sizeof(announcement));
+      lastBroadcastTime = millis();
+    }
   }
 }

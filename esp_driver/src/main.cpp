@@ -10,6 +10,9 @@
 #include <WiFi.h>
 #include <esp_now.h>
 
+// Maximum number of ESP-NOW clients
+#define MAX_CLIENTS 10
+
 // Comment out the following line if you are not using the WaveShare ESP32-S3
 #define WAVESHARE_USB_ESP32
 
@@ -28,7 +31,7 @@ Adafruit_NeoPixel pixels(NUM_LEDS, LED_PIN, NEO_GRB + NEO_KHZ800);
 // Make sure to include  #define NEOPIXEL_ENABLED if you do define it.
 
 // Replace with your receiver ESP32's MAC address
-uint8_t receiverMacAddress[] = {0xD8, 0x3B, 0xDA, 0x43, 0x0A, 0x3C};
+// uint8_t receiverMacAddress[] = {0xD8, 0x3B, 0xDA, 0x43, 0x0A, 0x3C};
 
 // Callback when data is sent
 void OnDataSent(const uint8_t *mac_addr, esp_now_send_status_t status)
@@ -67,7 +70,48 @@ struct JoystickData
   float right_y;
 };
 
+// Struct for service discovery broadcast
+struct ServiceAnnouncement
+{
+  char service_name[16];
+};
+
+// Struct for client registration
+struct ClientRegistration
+{
+  char message[16];
+};
+
 JoystickData joystick;
+
+// Store registered clients' MAC addresses
+uint8_t registeredClients[MAX_CLIENTS][6];
+int clientCount = 0;
+
+ServiceAnnouncement announcement = {"JoystickService"};
+
+// Callback for receiving messages (client registration)
+void OnDataRecv(const esp_now_recv_info *recv_info, const uint8_t *incomingData,
+                int len)
+{
+  ClientRegistration receivedMsg;
+  memcpy(&receivedMsg, incomingData, sizeof(receivedMsg));
+
+  if (strcmp(receivedMsg.message, "REGISTER") == 0)
+  {
+    Serial.printf("New client registered: %02X:%02X:%02X:%02X:%02X:%02X\n",
+                  recv_info->src_addr[0], recv_info->src_addr[1],
+                  recv_info->src_addr[2], recv_info->src_addr[3],
+                  recv_info->src_addr[4], recv_info->src_addr[5]);
+
+    // Add to registered clients list if space available
+    if (clientCount < MAX_CLIENTS)
+    {
+      memcpy(registeredClients[clientCount], recv_info->src_addr, 6);
+      clientCount++;
+    }
+  }
+}
 
 void setup()
 {
@@ -87,22 +131,38 @@ void setup()
   }
 
   esp_now_register_send_cb(OnDataSent);
+  esp_now_register_recv_cb(OnDataRecv);
 
-  esp_now_peer_info_t peerInfo;
-  memset(&peerInfo, 0, sizeof(peerInfo));
-  memcpy(peerInfo.peer_addr, receiverMacAddress, 6);
-  peerInfo.channel = 0;
-  peerInfo.encrypt = false;
+  //   Create a broadcast peer
+  esp_now_peer_info_t broadcastPeer;
+  memset(&broadcastPeer, 0, sizeof(broadcastPeer));
+  broadcastPeer.channel = 0;
+  broadcastPeer.encrypt = false;
+  memcpy(broadcastPeer.peer_addr, "\xFF\xFF\xFF\xFF\xFF\xFF", 6);
 
-  if (esp_now_add_peer(&peerInfo) != ESP_OK)
+  if (esp_now_add_peer(&broadcastPeer) != ESP_OK)
   {
-    Serial.println("Failed to add peer");
+    Serial.println("Failed to add broadcast peer");
     return;
   }
 
-  delay(1000);
+  //   esp_now_peer_info_t peerInfo;
+  //   memset(&peerInfo, 0, sizeof(peerInfo));
+  //   memcpy(peerInfo.peer_addr, receiverMacAddress, 6);
+  //   peerInfo.channel = 0;
+  //   peerInfo.encrypt = false;
+
+  //   if (esp_now_add_peer(&peerInfo) != ESP_OK)
+  //   {
+  //     Serial.println("Failed to add peer");
+  //     return;
+  //   }
+
+  delay(5000);
+  Serial.println("Setup complete");
 }
 
+unsigned long lastBroadcastTime = 0;
 void loop()
 {
   // Wait until joystick data is available on Serial
@@ -110,13 +170,28 @@ void loop()
   {
     Serial.readBytes((char *)&joystick, sizeof(joystick));
 
-    // Send data via ESP-NOW
-    esp_err_t result = esp_now_send(receiverMacAddress, (uint8_t *)&joystick,
-                                    sizeof(joystick));
+    // // Send data via ESP-NOW
+    // esp_err_t result = esp_now_send(receiverMacAddress, (uint8_t *)&joystick,
+    //                                 sizeof(joystick));
 
-    if (result != ESP_OK)
-    {
-      Serial.println("Error sending the data");
-    }
+    // for (int i = 0; i < clientCount; i++)
+    // {
+    //   esp_now_send(registeredClients[i], (uint8_t *)&joystick,
+    //                sizeof(joystick));
+    // }
+
+    // if (result != ESP_OK)
+    // {
+    //   Serial.println("Error sending the data");
+    // }
+  }
+
+  if (millis() - lastBroadcastTime >= 2000)
+  {
+    //
+    Serial.println("Broadcasting service announcement");
+    esp_now_send((uint8_t *)"\xFF\xFF\xFF\xFF\xFF\xFF",
+                 (uint8_t *)&announcement, sizeof(announcement));
+    lastBroadcastTime = millis();
   }
 }

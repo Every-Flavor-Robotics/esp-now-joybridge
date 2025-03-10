@@ -46,11 +46,6 @@ void OnDataSent(const uint8_t *mac_addr, esp_now_send_status_t status)
 #endif
 }
 
-struct InitSerial
-{
-  char service_name[16];
-};
-
 // Update the struct to match the data above
 struct JoystickData
 {
@@ -80,6 +75,11 @@ struct ServiceAnnouncement
   char service_name[16];
 };
 
+struct InitSerial
+{
+  char service_name[16];
+};
+
 // Struct for client registration
 struct ClientRegistration
 {
@@ -92,7 +92,7 @@ JoystickData joystick;
 uint8_t registeredClients[MAX_CLIENTS][6];
 int clientCount = 0;
 
-ServiceAnnouncement announcement = {"JoystickService"};
+ServiceAnnouncement announcement;
 
 // Callback for receiving messages (client registration)
 void OnDataRecv(const esp_now_recv_info *recv_info, const uint8_t *incomingData,
@@ -128,6 +128,33 @@ void OnDataRecv(const esp_now_recv_info *recv_info, const uint8_t *incomingData,
 
       clientCount++;
     }
+  }
+}
+
+void setup_esp_now()
+{
+  WiFi.mode(WIFI_STA);
+
+  if (esp_now_init() != ESP_OK)
+  {
+    Serial.println("ESP-NOW init failed");
+    return;
+  }
+
+  esp_now_register_send_cb(OnDataSent);
+  esp_now_register_recv_cb(OnDataRecv);
+
+  //   Create a broadcast peer
+  esp_now_peer_info_t broadcastPeer;
+  memset(&broadcastPeer, 0, sizeof(broadcastPeer));
+  broadcastPeer.channel = 0;
+  broadcastPeer.encrypt = false;
+  memcpy(broadcastPeer.peer_addr, "\xFF\xFF\xFF\xFF\xFF\xFF", 6);
+
+  if (esp_now_add_peer(&broadcastPeer) != ESP_OK)
+  {
+    Serial.println("Failed to add broadcast peer");
+    return;
   }
 }
 
@@ -243,6 +270,12 @@ void processSerial()
               //   Write the init message back to the serial port to finish
               //   handshake
               Serial.write((uint8_t *)&init, sizeof(init));
+
+              //   Set announcement meessage to be init.service_name
+              memcpy(announcement.service_name, init.service_name,
+                     sizeof(announcement.service_name));
+
+              setup_esp_now();
             }
             else
             {
@@ -287,30 +320,6 @@ void setup()
   pixels.show();
 
 #endif
-
-  WiFi.mode(WIFI_STA);
-
-  if (esp_now_init() != ESP_OK)
-  {
-    Serial.println("ESP-NOW init failed");
-    return;
-  }
-
-  esp_now_register_send_cb(OnDataSent);
-  esp_now_register_recv_cb(OnDataRecv);
-
-  //   Create a broadcast peer
-  esp_now_peer_info_t broadcastPeer;
-  memset(&broadcastPeer, 0, sizeof(broadcastPeer));
-  broadcastPeer.channel = 0;
-  broadcastPeer.encrypt = false;
-  memcpy(broadcastPeer.peer_addr, "\xFF\xFF\xFF\xFF\xFF\xFF", 6);
-
-  if (esp_now_add_peer(&broadcastPeer) != ESP_OK)
-  {
-    Serial.println("Failed to add broadcast peer");
-    return;
-  }
 
   Serial.println("Setup complete");
 }

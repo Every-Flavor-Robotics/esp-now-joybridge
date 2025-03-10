@@ -30,9 +30,6 @@ Adafruit_NeoPixel pixels(NUM_LEDS, LED_PIN, NEO_GRB + NEO_KHZ800);
 // You can optionally define and setup the neopixel if your board has one
 // Make sure to include  #define NEOPIXEL_ENABLED if you do define it.
 
-// Replace with your receiver ESP32's MAC address
-// uint8_t receiverMacAddress[] = {0xD8, 0x3B, 0xDA, 0x43, 0x0A, 0x3C};
-
 // Callback when data is sent
 void OnDataSent(const uint8_t *mac_addr, esp_now_send_status_t status)
 {
@@ -108,6 +105,20 @@ void OnDataRecv(const esp_now_recv_info *recv_info, const uint8_t *incomingData,
     if (clientCount < MAX_CLIENTS)
     {
       memcpy(registeredClients[clientCount], recv_info->src_addr, 6);
+
+      // Create a new peer
+      esp_now_peer_info_t peerInfo;
+      memset(&peerInfo, 0, sizeof(peerInfo));
+      peerInfo.channel = 0;
+      peerInfo.encrypt = false;
+      memcpy(peerInfo.peer_addr, recv_info->src_addr, 6);
+
+      if (esp_now_add_peer(&peerInfo) != ESP_OK)
+      {
+        Serial.println("Failed to add peer");
+        return;
+      }
+
       clientCount++;
     }
   }
@@ -146,18 +157,6 @@ void setup()
     return;
   }
 
-  //   esp_now_peer_info_t peerInfo;
-  //   memset(&peerInfo, 0, sizeof(peerInfo));
-  //   memcpy(peerInfo.peer_addr, receiverMacAddress, 6);
-  //   peerInfo.channel = 0;
-  //   peerInfo.encrypt = false;
-
-  //   if (esp_now_add_peer(&peerInfo) != ESP_OK)
-  //   {
-  //     Serial.println("Failed to add peer");
-  //     return;
-  //   }
-
   delay(5000);
   Serial.println("Setup complete");
 }
@@ -170,26 +169,15 @@ void loop()
   {
     Serial.readBytes((char *)&joystick, sizeof(joystick));
 
-    // // Send data via ESP-NOW
-    // esp_err_t result = esp_now_send(receiverMacAddress, (uint8_t *)&joystick,
-    //                                 sizeof(joystick));
-
-    // for (int i = 0; i < clientCount; i++)
-    // {
-    //   esp_now_send(registeredClients[i], (uint8_t *)&joystick,
-    //                sizeof(joystick));
-    // }
-
-    // if (result != ESP_OK)
-    // {
-    //   Serial.println("Error sending the data");
-    // }
+    for (int i = 0; i < clientCount; i++)
+    {
+      esp_now_send(registeredClients[i], (uint8_t *)&joystick,
+                   sizeof(joystick));
+    }
   }
 
   if (millis() - lastBroadcastTime >= 2000)
   {
-    //
-    Serial.println("Broadcasting service announcement");
     esp_now_send((uint8_t *)"\xFF\xFF\xFF\xFF\xFF\xFF",
                  (uint8_t *)&announcement, sizeof(announcement));
     lastBroadcastTime = millis();

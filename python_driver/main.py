@@ -22,7 +22,7 @@ def get_struct(left, right):
 
 def main():
 
-    # ser = serial.Serial("/dev/ttyACM0", 115200)
+    ser = serial.Serial("/dev/ttyACM0", 115200)
     # ser2 = serial.Serial("/dev/ttyACM1", 115200)
 
     controller = XboxController()
@@ -32,14 +32,10 @@ def main():
 
             controller.update()
 
-            print(controller)
-
-            time.sleep(0.1)
-
-            # msg = get_struct(left, right)
+            msg = controller.get_struct()
 
             # start = time.time()
-            # ser.write(msg)
+            ser.write(msg)
 
             # # Wait for ser2 to send a message back
             # while ser2.in_waiting == 0:
@@ -49,13 +45,12 @@ def main():
             # print(f"Time taken: {elapsed_ms:.2f} ms")
             # print(ser2.read(ser2.in_waiting))
 
-            # time.sleep(0.1)
+            time.sleep(0.1)
 
     except KeyboardInterrupt:
         pass
     finally:
         ser.close()
-        ser2.close()
         pygame.quit()
 
 

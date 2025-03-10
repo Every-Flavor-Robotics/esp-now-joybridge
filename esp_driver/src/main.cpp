@@ -33,6 +33,7 @@ Adafruit_NeoPixel pixels(NUM_LEDS, LED_PIN, NEO_GRB + NEO_KHZ800);
 // Callback when data is sent
 void OnDataSent(const uint8_t *mac_addr, esp_now_send_status_t status)
 {
+#ifdef NEOPIXEL_ENABLED
   if (status == ESP_NOW_SEND_SUCCESS)
   {
     pixels.setPixelColor(0, pixels.Color(255, 0, 0));
@@ -42,7 +43,13 @@ void OnDataSent(const uint8_t *mac_addr, esp_now_send_status_t status)
     pixels.setPixelColor(0, pixels.Color(0, 255, 0));
   }
   pixels.show();
+#endif
 }
+
+struct InitSerial
+{
+  char service_name[16];
+};
 
 // Update the struct to match the data above
 struct JoystickData
@@ -123,15 +130,142 @@ void OnDataRecv(const esp_now_recv_info *recv_info, const uint8_t *incomingData,
     }
   }
 }
+// --- Serial State Machine Definitions ---
+// We now have three states:
+//   WAIT_FOR_HEADER: Look for the "STAR" header
+//   READ_MSG_TYPE: Read one byte for the message type
+//   READ_PAYLOAD: Read the payload based on the message type
+enum SerialState
+{
+  WAIT_FOR_HEADER,
+  READ_MSG_TYPE,
+  READ_PAYLOAD
+};
+
+SerialState serialState = WAIT_FOR_HEADER;
+const unsigned long TIMEOUT_MS = 100;  // Timeout in milliseconds
+unsigned long lastByteTime = 0;
+
+const int HEADER_SIZE = 4;
+char headerBuffer[HEADER_SIZE];
+int headerIndex = 0;
+
+uint8_t messageType = 0;
+uint16_t payloadLength = 0;
+const int MAX_PAYLOAD_SIZE =
+    sizeof(JoystickData) + 10;  // Sufficient for our payload
+uint8_t payloadBuffer[MAX_PAYLOAD_SIZE];
+int payloadIndex = 0;
+
+void processSerial()
+{
+  // Process all available bytes from Serial
+  while (Serial.available() > 0)
+  {
+    char inByte = Serial.read();
+    lastByteTime = millis();
+
+    switch (serialState)
+    {
+      case WAIT_FOR_HEADER:
+        headerBuffer[headerIndex++] = inByte;
+        if (headerIndex == HEADER_SIZE)
+        {
+          if (memcmp(headerBuffer, "STAR", HEADER_SIZE) == 0)
+          {
+            // Serial.println("Header found");
+            serialState = READ_MSG_TYPE;
+          }
+          else
+          {
+            // Shift the header buffer left by one and keep searching
+            memmove(headerBuffer, headerBuffer + 1, HEADER_SIZE - 1);
+            headerIndex = HEADER_SIZE - 1;
+          }
+        }
+        break;
+
+      case READ_MSG_TYPE:
+        // The next byte is the message type.
+        messageType = inByte;
+        // Decide expected payload length based on the message type.
+        if (messageType == 0x01)
+        {  // Joystick message
+          payloadLength = sizeof(JoystickData);
+        }
+        else if (messageType == 0x02)
+        {  // Init message
+          payloadLength = sizeof(InitSerial);
+        }
+        else
+        {
+          //   Serial.println("Unknown message type");
+          serialState = WAIT_FOR_HEADER;
+          headerIndex = 0;
+          break;
+        }
+        // Serial.print("Message type: ");
+        // Serial.println(messageType, HEX);
+        serialState = READ_PAYLOAD;
+        payloadIndex = 0;
+        break;
+
+      case READ_PAYLOAD:
+        payloadBuffer[payloadIndex++] = inByte;
+        if (payloadIndex >= payloadLength)
+        {
+          // Process the payload based on the message type.
+          if (messageType == 0x01)
+          {
+            memcpy(&joystick, payloadBuffer, payloadLength);
+            for (int i = 0; i < clientCount; i++)
+            {
+              //   Serial.println("Sending joystick data to client");
+              esp_now_send(registeredClients[i], (uint8_t *)&joystick,
+                           sizeof(joystick));
+            }
+          }
+          else if (messageType == 0x02)
+          {
+            InitSerial init;
+            memcpy(&init, payloadBuffer, payloadLength);
+            // Serial.println("Init message received:");
+            // Serial.println(init.service_name);
+
+            // Send back the init response exactly
+            // Write the InitSerial struct to the serial port
+            Serial.write((uint8_t *)&init, sizeof(init));
+          }
+          // Reset the state machine for the next packet.
+          serialState = WAIT_FOR_HEADER;
+          headerIndex = 0;
+        }
+        break;
+    }
+  }
+
+  // Timeout handling: If no new data arrives within TIMEOUT_MS, reset the state
+  // machine.
+  if ((millis() - lastByteTime) > TIMEOUT_MS)
+  {
+    serialState = WAIT_FOR_HEADER;
+    headerIndex = 0;
+    payloadIndex = 0;
+  }
+}
 
 void setup()
 {
   Serial.begin(115200);
 
+#ifdef NEOPIXEL_ENABLED
+
   pixels.begin();
   pixels.setPixelColor(0, pixels.Color(0, 255, 0));
   pixels.setBrightness(255);
   pixels.show();
+
+#endif
 
   WiFi.mode(WIFI_STA);
 
@@ -164,19 +298,10 @@ void setup()
 unsigned long lastBroadcastTime = 0;
 void loop()
 {
-  // Wait until joystick data is available on Serial
-  if (Serial.available() >= sizeof(joystick))
-  {
-    Serial.readBytes((char *)&joystick, sizeof(joystick));
+  // Process incoming serial data using our state machine
+  processSerial();
 
-    for (int i = 0; i < clientCount; i++)
-    {
-      esp_now_send(registeredClients[i], (uint8_t *)&joystick,
-                   sizeof(joystick));
-    }
-  }
-
-  if (millis() - lastBroadcastTime >= 2000)
+  if (millis() - lastBroadcastTime >= 3000)
   {
     esp_now_send((uint8_t *)"\xFF\xFF\xFF\xFF\xFF\xFF",
                  (uint8_t *)&announcement, sizeof(announcement));

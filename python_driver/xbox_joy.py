@@ -1,12 +1,14 @@
 import struct
 
+import pygame
+
 
 class XboxController:
     """
     This class is used to describe the current state of an Xbox controller.
     """
 
-    def __init__(self):
+    def __init__(self, joystick_number=0):
 
         # 12 buttons
         self.a = False
@@ -37,6 +39,47 @@ class XboxController:
 
         self.right_x = 0.0
         self.right_y = 0.0
+
+        # Initialize the joystick
+        self.joystick_number = joystick_number
+        self.joystick = pygame.joystick.Joystick(joystick_number)
+
+    def update(self):
+        # Update the joystick state
+        pygame.event.pump()
+
+        # Get the current state of all buttons
+        self.a = self.joystick.get_button(0)
+        self.b = self.joystick.get_button(1)
+        self.x = self.joystick.get_button(2)
+        self.y = self.joystick.get_button(3)
+
+        self.lb = self.joystick.get_button(4)
+        self.rb = self.joystick.get_button(5)
+
+        dpad_state = self.joystick.get_hat(0)
+
+        self.dpad_up = dpad_state[1] == 1
+        self.dpad_down = dpad_state[1] == -1
+        self.dpad_left = dpad_state[0] == -1
+        self.dpad_right = dpad_state[0] == 1
+
+        self.back = self.joystick.get_button(6)
+        self.start = self.joystick.get_button(7)
+
+        self.left_thumb = self.joystick.get_button(8)
+        self.right_thumb = self.joystick.get_button(9)
+
+        # Get the current state of the triggers
+        self.lt = self.joystick.get_axis(2)
+        self.rt = self.joystick.get_axis(5)
+
+        # Get the current state of the thumbsticks
+        self.left_x = self.joystick.get_axis(0)
+        self.left_y = self.joystick.get_axis(1)
+
+        self.right_x = self.joystick.get_axis(3)
+        self.right_y = self.joystick.get_axis(4)
 
     # Pack into a struct
     def get_struct(self):
@@ -72,4 +115,5 @@ class XboxController:
         )
 
     def __repr__(self):
+        return str(self)
         return str(self)

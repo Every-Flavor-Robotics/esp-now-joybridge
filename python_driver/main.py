@@ -1,8 +1,8 @@
-import serial
-import time
 import struct
-import pygame
+import time
 
+import pygame
+import serial
 from xbox_joy import XboxController
 
 # Initialize PyGame for joystick input
@@ -22,33 +22,34 @@ def get_struct(left, right):
 
 def main():
 
-    ser = serial.Serial("/dev/ttyACM0", 115200)
-    ser2 = serial.Serial("/dev/ttyACM1", 115200)
+    # ser = serial.Serial("/dev/ttyACM0", 115200)
+    # ser2 = serial.Serial("/dev/ttyACM1", 115200)
 
-    controller_data = XboxController()
+    controller = XboxController()
 
     try:
         while True:
-            pygame.event.pump()  # Update joystick state
 
-            # Get joystick values (assume axes 0 and 1 for example)
-            left = joystick.get_axis(0)
-            right = joystick.get_axis(1)
+            controller.update()
 
-            msg = get_struct(left, right)
-
-            start = time.time()
-            ser.write(msg)
-
-            # Wait for ser2 to send a message back
-            while ser2.in_waiting == 0:
-                pass
-
-            elapsed_ms = (time.time() - start) * 1000
-            print(f"Time taken: {elapsed_ms:.2f} ms")
-            print(ser2.read(ser2.in_waiting))
+            print(controller)
 
             time.sleep(0.1)
+
+            # msg = get_struct(left, right)
+
+            # start = time.time()
+            # ser.write(msg)
+
+            # # Wait for ser2 to send a message back
+            # while ser2.in_waiting == 0:
+            #     pass
+
+            # elapsed_ms = (time.time() - start) * 1000
+            # print(f"Time taken: {elapsed_ms:.2f} ms")
+            # print(ser2.read(ser2.in_waiting))
+
+            # time.sleep(0.1)
 
     except KeyboardInterrupt:
         pass

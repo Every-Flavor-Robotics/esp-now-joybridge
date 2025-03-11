@@ -177,7 +177,7 @@ const unsigned long TIMEOUT_MS =
 unsigned long lastByteTime = 0;
 
 // Global watchdog timeout for the serial link (e.g., 5000 ms)
-const unsigned long DISCONNECT_TIMEOUT = 5000;
+const unsigned long DISCONNECT_TIMEOUT = 1000;
 unsigned long lastMessageTime = 0;
 
 const int HEADER_SIZE = 4;
@@ -285,7 +285,7 @@ void processSerial()
               pixels.setBrightness(255);
               pixels.show();
 
-              delay(1000);
+              delay(50);
 
               ESP.restart();
             }

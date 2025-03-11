@@ -1,10 +1,39 @@
 import struct
 import time
+import platform
 
 import click
 import pygame
 import serial
+import serial.tools.list_ports
 from xbox_joy import XboxController
+
+
+# Function to automatically guess the serial port for esp32-s3 devices
+def guess_serial_port():
+    ports = list(serial.tools.list_ports.comports())
+    for port in ports:
+        # Check if the device pid is 4097
+        if port.pid == 4097:
+            return port.device
+
+        if "esp32" in port.description.lower():
+            return port.device
+    return None
+
+
+# Determine default serial port based on OS
+guessed_port = guess_serial_port()
+if guessed_port:
+    DEFAULT_SERIAL_PORT = guessed_port
+else:
+    # Fallback defaults for Windows and macOS if automatic detection fails
+    if platform.system() == "Windows":
+        DEFAULT_SERIAL_PORT = "COM3"
+    elif platform.system() == "Darwin":
+        DEFAULT_SERIAL_PORT = "/dev/cu.usbmodem1421"  # This may vary on macOS
+    else:
+        DEFAULT_SERIAL_PORT = "/dev/ttyACM0"
 
 # Initialize PyGame for joystick input
 pygame.init()
@@ -84,9 +113,7 @@ def perform_handshake(ser, service_name):
                 received_service_name = decode_init_message(response)
                 if received_service_name.strip("\x00") == service_name:
                     handshake_success = True
-
                     click.secho("Connected to transmitter", fg="green")
-
                     break
         if handshake_success:
             break
@@ -94,18 +121,17 @@ def perform_handshake(ser, service_name):
     return handshake_success
 
 
-def run_communication_loop(controller):
+def run_communication_loop(controller, serial_port, service_name):
     ser = None
     try:
-        ser = serial.Serial("/dev/ttyACM0", 115200, timeout=1)
+        click.secho("Attempting to connect on serial port: " + serial_port, fg="yellow")
+        ser = serial.Serial(serial_port, 115200, timeout=1)
 
-        service_name = "JoystickService"
         if not perform_handshake(ser, service_name):
             print("Handshake failed. Exiting communication loop.")
             ser.close()
             return
 
-        # try:
         while True:
             controller.update()
             msg = controller.get_struct()
@@ -125,12 +151,23 @@ def run_communication_loop(controller):
         raise
 
 
-def main():
+@click.command()
+@click.option(
+    "--serial-port",
+    default=DEFAULT_SERIAL_PORT,
+    help="Serial port to use for connection (e.g., /dev/ttyACM0 or COM3)",
+)
+@click.option(
+    "--service-name",
+    default="JoystickService",
+    help="Service name for the handshake (max 16 characters)",
+)
+def main(serial_port, service_name):
     while True:
         controller = XboxController()
         try:
-            run_communication_loop(controller)
-        except (serial.SerialException, OSError) as e:
+            run_communication_loop(controller, serial_port, service_name)
+        except (serial.SerialException, OSError):
             time.sleep(2)
         except KeyboardInterrupt:
             break

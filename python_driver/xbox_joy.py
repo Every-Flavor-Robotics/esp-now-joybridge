@@ -44,6 +44,11 @@ class XboxController:
         self.joystick_number = joystick_number
         self.joystick = pygame.joystick.Joystick(joystick_number)
 
+        # Check if dpad is available
+        self.has_dpad = False
+        if self.joystick.get_numhats() > 0:
+            self.has_dpad = True
+
     def update(self):
         # Update the joystick state
         pygame.event.pump()
@@ -57,12 +62,13 @@ class XboxController:
         self.lb = self.joystick.get_button(4)
         self.rb = self.joystick.get_button(5)
 
-        dpad_state = self.joystick.get_hat(0)
+        if self.has_dpad:
+            dpad_state = self.joystick.get_hat(0)
 
-        self.dpad_up = dpad_state[1] == 1
-        self.dpad_down = dpad_state[1] == -1
-        self.dpad_left = dpad_state[0] == -1
-        self.dpad_right = dpad_state[0] == 1
+            self.dpad_up = dpad_state[1] == 1
+            self.dpad_down = dpad_state[1] == -1
+            self.dpad_left = dpad_state[0] == -1
+            self.dpad_right = dpad_state[0] == 1
 
         self.back = self.joystick.get_button(6)
         self.start = self.joystick.get_button(7)

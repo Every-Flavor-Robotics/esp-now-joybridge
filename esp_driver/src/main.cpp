@@ -29,6 +29,88 @@
 Adafruit_NeoPixel pixels(NUM_LEDS, LED_PIN, NEO_GRB + NEO_KHZ800);
 #endif
 
+// -------------------- LED Event Queue --------------------
+// This event queue handles connection/disconnection events that override
+// intensity.
+
+unsigned long last_esp_now_send = 0;
+
+// -------------------- LED Status State --------------------
+enum LEDState
+{
+  LED_UNINITIALIZED,  // serial not connected / not initialized
+  LED_READY,          // ESP-NOW ready for connection
+  LED_CONNECTED,      // ESP-NOW devices connected
+};
+
+LEDState currentLEDState = LED_UNINITIALIZED;
+
+// Return the base color for the current LED state.
+// This color remains constant; events will override brightness.
+uint32_t getBaseColor()
+{
+#ifdef NEOPIXEL_ENABLED
+  switch (currentLEDState)
+  {
+    case LED_UNINITIALIZED:
+      return pixels.Color(255, 0, 0);  // Red
+    case LED_READY:
+      return pixels.Color(0, 0, 255);  // Blue
+    case LED_CONNECTED:
+      return pixels.Color(0, 255, 0);  // Green
+    default:
+      return pixels.Color(0, 0, 0);
+  }
+#else
+  return 0;
+#endif
+}
+
+// Non-blocking LED update using a timer.
+unsigned long ledLastUpdate = 0;
+const unsigned long LED_UPDATE_INTERVAL = 100;  // Update every 500 ms
+bool ledOn = false;
+
+void updateLED()
+{
+#ifdef NEOPIXEL_ENABLED
+  unsigned long now = millis();
+  if (now - ledLastUpdate >= LED_UPDATE_INTERVAL)
+  {
+    ledLastUpdate = now;
+
+    // Blink the LED only if serial is initialized and there are clients.
+    // This means that we ARE transmitting messages to clients.
+    if (millis() - last_esp_now_send < 500)
+    {
+      ledOn = !ledOn;  // Toggle blink state
+    }
+    else
+    {
+      ledOn = true;  // LED does not blink otherwise
+    }
+
+    int brightness = ledOn ? 255 : 150;
+
+    // Get the base color from the current LED state.
+    uint32_t baseColor = getBaseColor();
+
+    // Extract RGB channels from baseColor.
+    uint8_t g = (baseColor >> 16) & 0xFF;
+    uint8_t r = (baseColor >> 8) & 0xFF;
+    uint8_t b = baseColor & 0xFF;
+    // Apply brightness scaling (assuming 255 is full brightness).
+    r = (r * brightness) / 255;
+    g = (g * brightness) / 255;
+    b = (b * brightness) / 255;
+
+    uint32_t colorToShow = pixels.Color(r, g, b);
+    pixels.setPixelColor(0, colorToShow);
+    pixels.show();
+  }
+#endif
+}
+
 // You can optionally define and setup the neopixel if your board has one
 // Make sure to include  #define NEOPIXEL_ENABLED if you do define it.
 
@@ -85,18 +167,6 @@ ServiceAnnouncement announcement;
 // Callback when data is sent
 void OnDataSent(const uint8_t *mac_addr, esp_now_send_status_t status)
 {
-#ifdef NEOPIXEL_ENABLED
-  if (status == ESP_NOW_SEND_SUCCESS)
-  {
-    pixels.setPixelColor(0, pixels.Color(255, 0, 0));
-  }
-  else
-  {
-    pixels.setPixelColor(0, pixels.Color(0, 255, 0));
-  }
-  pixels.show();
-#endif
-
   // Master-side timeout strategy:
   // If the transmission to a client fails, increment its failure count.
   // If the count exceeds the threshold, remove that client.
@@ -133,6 +203,7 @@ void OnDataSent(const uint8_t *mac_addr, esp_now_send_status_t status)
   }
   else
   {
+    last_esp_now_send = millis();
     // On success, reset the failure counter for the client.
     for (int i = 0; i < clientCount; i++)
     {
@@ -246,12 +317,11 @@ int payloadIndex = 0;
 
 void processSerial()
 {
-  // Process all available bytes from Serial
   while (Serial.available() > 0)
   {
     char inByte = Serial.read();
     lastByteTime = millis();
-    lastMessageTime = millis();  // Update global watchdog timer
+    lastMessageTime = millis();  // Update watchdog timer
 
     switch (serialState)
     {
@@ -261,12 +331,10 @@ void processSerial()
         {
           if (memcmp(headerBuffer, "STAR", HEADER_SIZE) == 0)
           {
-            // Header found; move to read message type state
             serialState = READ_MSG_TYPE;
           }
           else
           {
-            // Shift the header buffer left by one and keep searching
             memmove(headerBuffer, headerBuffer + 1, HEADER_SIZE - 1);
             headerIndex = HEADER_SIZE - 1;
           }
@@ -274,9 +342,7 @@ void processSerial()
         break;
 
       case READ_MSG_TYPE:
-        // The next byte is the message type.
         messageType = inByte;
-        // Decide expected payload length based on the message type.
         if (messageType == 0x01)
         {  // Joystick message
           payloadLength = sizeof(JoystickData);
@@ -299,10 +365,10 @@ void processSerial()
         payloadBuffer[payloadIndex++] = inByte;
         if (payloadIndex >= payloadLength)
         {
-          // Process the payload based on the message type.
           if (messageType == 0x01)
           {
             memcpy(&joystick, payloadBuffer, payloadLength);
+            // Send joystick data to all registered ESP-NOW clients.
             for (int i = 0; i < clientCount; i++)
             {
               esp_now_send(registeredClients[i], (uint8_t *)&joystick,
@@ -314,42 +380,35 @@ void processSerial()
             if (!serialInitialized)
             {
               serialInitialized = true;
-
               InitSerial init;
               memcpy(&init, payloadBuffer, payloadLength);
-
-              //   Write the init message back to the serial port to finish
-              //   handshake
+              // Echo the init message back to complete handshake.
               Serial.write((uint8_t *)&init, sizeof(init));
-
-              //   Set announcement meessage to be init.service_name
+              // Set the service announcement to the received service name.
               memcpy(announcement.service_name, init.service_name,
                      sizeof(announcement.service_name));
-
               setup_esp_now();
+              // Update LED state: now ready.
+              currentLEDState = LED_READY;
             }
             else
             {
-              // We received an initialization message, when we didn't expect
-              // one. Reboot the ESP to resync
+              // Received unexpected re-init message; reboot to resync.
+#ifdef NEOPIXEL_ENABLED
               pixels.setPixelColor(0, pixels.Color(0, 255, 255));
               pixels.setBrightness(255);
               pixels.show();
-
+#endif
               delay(50);
-
               ESP.restart();
             }
           }
-          // Reset the state machine for the next packet.
           serialState = WAIT_FOR_HEADER;
           headerIndex = 0;
         }
         break;
     }
   }
-
-  // Timeout handling for the serial state machine.
   if ((millis() - lastByteTime) > TIMEOUT_MS)
   {
     serialState = WAIT_FOR_HEADER;
@@ -366,34 +425,41 @@ void setup()
 #ifdef NEOPIXEL_ENABLED
 
   pixels.begin();
-  pixels.setPixelColor(0, pixels.Color(0, 255, 0));
-  pixels.setBrightness(255);
+  pixels.setBrightness(100);
   pixels.show();
 
 #endif
 
-  Serial.println("Setup complete");
+  //   Serial.println("Setup complete");
 }
 
 unsigned long lastBroadcastTime = 0;
 void loop()
 {
-  // Process incoming serial data using our state machine
   processSerial();
 
   if (serialInitialized)
   {
-    // Global watchdog: if no valid message is received for DISCONNECT_TIMEOUT,
-    // reboot the ESP32.
+    // Update LED state based on registered peers.
+    if (clientCount > 0)
+    {
+      currentLEDState = LED_CONNECTED;
+    }
+    else
+    {
+      currentLEDState = LED_READY;
+    }
+
+    // Global watchdog: reboot if no serial message received for
+    // DISCONNECT_TIMEOUT.
     if ((millis() - lastMessageTime) > DISCONNECT_TIMEOUT)
     {
       Serial.println("No message received for a while. Rebooting ESP32...");
-      delay(100);
-
-      pixels.setPixelColor(0, pixels.Color(0, 255, 255));
-      pixels.setBrightness(255);
-      pixels.show();
-
+      // #ifdef NEOPIXEL_ENABLED
+      //       pixels.setPixelColor(0, pixels.Color(0, 255, 255));
+      //       pixels.setBrightness(255);
+      //       pixels.show();
+      // #endif
       delay(1000);
       ESP.restart();
     }
@@ -405,4 +471,10 @@ void loop()
       lastBroadcastTime = millis();
     }
   }
+  else
+  {
+    currentLEDState = LED_UNINITIALIZED;
+  }
+
+  updateLED();  // Update LED status non-blocking.
 }

@@ -12,6 +12,8 @@
 
 // Maximum number of ESP-NOW clients
 #define MAX_CLIENTS 10
+// Number of consecutive failures before removing a client
+#define FAILURE_THRESHOLD 10
 
 // Comment out the following line if you are not using the WaveShare ESP32-S3
 #define WAVESHARE_USB_ESP32
@@ -29,22 +31,6 @@ Adafruit_NeoPixel pixels(NUM_LEDS, LED_PIN, NEO_GRB + NEO_KHZ800);
 
 // You can optionally define and setup the neopixel if your board has one
 // Make sure to include  #define NEOPIXEL_ENABLED if you do define it.
-
-// Callback when data is sent
-void OnDataSent(const uint8_t *mac_addr, esp_now_send_status_t status)
-{
-#ifdef NEOPIXEL_ENABLED
-  if (status == ESP_NOW_SEND_SUCCESS)
-  {
-    pixels.setPixelColor(0, pixels.Color(255, 0, 0));
-  }
-  else
-  {
-    pixels.setPixelColor(0, pixels.Color(0, 255, 0));
-  }
-  pixels.show();
-#endif
-}
 
 // Update the struct to match the data above
 struct JoystickData
@@ -88,11 +74,76 @@ struct ClientRegistration
 
 JoystickData joystick;
 
-// Store registered clients' MAC addresses
+// Array to store registered clients' MAC addresses
 uint8_t registeredClients[MAX_CLIENTS][6];
 int clientCount = 0;
+// Parallel array to track failure counts per client.
+int failureCounts[MAX_CLIENTS] = {0};
 
 ServiceAnnouncement announcement;
+
+// Callback when data is sent
+void OnDataSent(const uint8_t *mac_addr, esp_now_send_status_t status)
+{
+#ifdef NEOPIXEL_ENABLED
+  if (status == ESP_NOW_SEND_SUCCESS)
+  {
+    pixels.setPixelColor(0, pixels.Color(255, 0, 0));
+  }
+  else
+  {
+    pixels.setPixelColor(0, pixels.Color(0, 255, 0));
+  }
+  pixels.show();
+#endif
+
+  // Master-side timeout strategy:
+  // If the transmission to a client fails, increment its failure count.
+  // If the count exceeds the threshold, remove that client.
+  if (status != ESP_NOW_SEND_SUCCESS)
+  {
+    for (int i = 0; i < clientCount; i++)
+    {
+      if (memcmp(mac_addr, registeredClients[i], 6) == 0)
+      {
+        failureCounts[i]++;
+        Serial.printf("Failure sending to client %d, count: %d\n", i,
+                      failureCounts[i]);
+        if (failureCounts[i] >= FAILURE_THRESHOLD)
+        {
+          if (esp_now_del_peer(registeredClients[i]) == ESP_OK)
+          {
+            Serial.printf("Removed client %d due to repeated failures\n", i);
+            // Shift remaining clients in the array
+            for (int j = i; j < clientCount - 1; j++)
+            {
+              memcpy(registeredClients[j], registeredClients[j + 1], 6);
+              failureCounts[j] = failureCounts[j + 1];
+            }
+            clientCount--;
+          }
+          else
+          {
+            Serial.println("Failed to remove peer");
+          }
+        }
+        break;  // Found the client; exit loop.
+      }
+    }
+  }
+  else
+  {
+    // On success, reset the failure counter for the client.
+    for (int i = 0; i < clientCount; i++)
+    {
+      if (memcmp(mac_addr, registeredClients[i], 6) == 0)
+      {
+        failureCounts[i] = 0;
+        break;
+      }
+    }
+  }
+}
 
 // Callback for receiving messages (client registration)
 void OnDataRecv(const esp_now_recv_info *recv_info, const uint8_t *incomingData,

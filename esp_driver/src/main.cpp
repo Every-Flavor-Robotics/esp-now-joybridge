@@ -29,6 +29,9 @@
 Adafruit_NeoPixel pixels(NUM_LEDS, LED_PIN, NEO_GRB + NEO_KHZ800);
 #endif
 
+// You can optionally define and setup the neopixel if your board has one
+// Make sure to include  #define NEOPIXEL_ENABLED if you do define it.
+
 // -------------------- LED Event Queue --------------------
 // This event queue handles connection/disconnection events that override
 // intensity.

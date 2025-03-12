@@ -12,5 +12,5 @@ dependencies = [
     "pyserial>=3.5",
 ]
 
-[project.entry-points]
-efr.plugins = { "joybridge=joybridge.cli:joybridge" }
+[project.entry-points."efr.plugins"]
+joybridge = "joybridge.cli:joybridge"

@@ -1,7 +1,7 @@
 [project]
-name = "joybridge-host"
+name = "joybridge"
 version = "0.1.0"
-description = "Python interface for using a USB dongle as an ESP-NOW transponder"
+description = "Use an ESP32-S3 as an ESP-NOW transponder to relay joystick input."
 readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [
@@ -13,10 +13,10 @@ dependencies = [
 ]
 
 [project.entry-points."efr.plugins"]
-joybridge = "joybridge_host.cli:joybridge"
+joybridge = "joybridge.cli:joybridge"
 
 [tool.setuptools]
-packages = ["joybridge_host"]
+packages = ["joybridge"]
 
 [tool.setuptools.package-data]
-joybridge_host = ["assets/**/*"]
+joybridge = ["assets/**/*"]

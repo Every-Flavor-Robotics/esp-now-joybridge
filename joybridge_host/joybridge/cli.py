@@ -8,7 +8,7 @@ import esptool
 import serial
 import serial.tools.list_ports
 
-from joybridge_host.xbox_joy import XboxController
+from joybridge.xbox_joy import XboxController
 
 
 # Function to automatically guess the serial port for esp32-s3 devices

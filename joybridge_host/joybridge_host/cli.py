@@ -229,7 +229,8 @@ def flash_firmware(
 
     # Paths to the binary files
     # Check that fimrware_dir exists
-    firmware_dir = Path(firmware_dir)
+    # Get path relative to this script
+    firmware_dir = Path(__file__).parent / firmware_dir
     assert firmware_dir.exists(), f"Directory {firmware_dir} does not exist."
 
     bootloader = firmware_dir / "bootloader.bin"

@@ -158,9 +158,77 @@ def run_communication_loop(controller, serial_port, service_name):
         raise
 
 
-@click.group()
-def joybridge():
-    pass
+@click.group(
+    name="joybridge",
+    invoke_without_command=True,
+)
+@click.pass_context
+def joybridge(ctx):
+    """
+    🎮 JoyBridge Host 🎮
+
+    A tool for using an ESP32-S3 as an ESP-NOW transponder to relay joystick input to other ESP32 devices.
+
+    Available Commands:
+      main      Run the JoyBridge host to send joystick data
+      flash     Flash the ESP32-S3 with the JoyBridge firmware
+
+    Example Usage:
+      efr joybridge flash
+      efr joybridge main
+    """
+    if ctx.invoked_subcommand is None:
+        click.secho("\n🎮  JoyBridge Host 🎮", fg="magenta", bold=True)
+        click.echo()
+        click.secho(
+            "Use an ESP32-S3 as an ESP-NOW transponder to relay joystick input.",
+            fg="cyan",
+        )
+        click.echo()
+
+        click.secho("🔹 Getting Started:", fg="cyan", bold=True)
+        click.secho("1️⃣  Flash the ESP32-S3 with the JoyBridge firmware:", fg="yellow")
+        click.secho("    efr joybridge flash", fg="green")
+        click.echo()
+
+        click.secho("2️⃣  Run the JoyBridge host to send joystick data:", fg="yellow")
+        click.secho("    efr joybridge main", fg="green")
+        click.echo()
+
+        click.secho("📌 Notes:", fg="cyan", bold=True)
+        click.secho(
+            "• The application attempts to autodetect the serial port. "
+            "If it fails, use the --port option to specify it manually.",
+            fg="cyan",
+        )
+        click.secho(
+            "• You can specify a service name with --service-name, which is used by receivers to identify the transmitter.",
+            fg="cyan",
+        )
+        click.echo()
+
+        click.secho("🔗 Receiver Setup:", fg="cyan", bold=True)
+        click.secho(
+            "Set up your ESP32 receiver using the Arduino library:", fg="yellow"
+        )
+        click.secho(
+            "https://github.com/Every-Flavor-Robotics/esp-now-joybridge-receiver/tree/main",
+            fg="blue",
+            underline=True,
+        )
+        click.echo()
+
+        click.secho("🛠️  Available Commands:", fg="cyan", bold=True)
+        click.secho(
+            "  main      Run the JoyBridge host to send joystick data", fg="green"
+        )
+        click.secho(
+            "  flash     Flash the ESP32-S3 with the JoyBridge firmware", fg="green"
+        )
+        click.echo()
+
+        click.secho("🎮 Happy gaming! 🕹️", fg="magenta", bold=True)
+        ctx.exit(0)
 
 
 @joybridge.command()
@@ -175,6 +243,13 @@ def joybridge():
     help="Service name for the handshake (max 16 characters)",
 )
 def main(serial_port, service_name):
+    """Run the JoyBridge host to publish joystick commands.
+
+    Args:
+        serial_port (str): Serial port to use for connection (e.g., /dev/ttyACM0 or COM3).
+            If not provided, application will attempt to guess the port.
+        service_name (str): Service name for this joystick connection (max 16 characters).
+    """
     while True:
         controller = XboxController()
         try:
@@ -201,9 +276,10 @@ def flash_firmware(
     port="/dev/ttyS0",
     baud="460800",
 ):
-    """
-    Flash an ESP32-S3 with multiple binary files (bootloader, partition table,
-    boot_app0, and main firmware) using esptool, similar to PlatformIO's command:
+    """Flash ESP32-S3 with the joybridge firmware.
+
+    This function uses the esptool.py utility to flash the ESP32-S3 with the bootloader,
+    partitions, boot_app0, and firmware binaries. The command executed is similar to:
 
       esptool.py
           --chip esp32s3

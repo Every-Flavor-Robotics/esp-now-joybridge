@@ -14,3 +14,9 @@ dependencies = [
 
 [project.entry-points."efr.plugins"]
 joybridge = "joybridge_host.cli:joybridge"
+
+[tool.setuptools]
+packages = ["joybridge_host"]
+
+[tool.setuptools.package-data]
+joybridge_host = ["assets/**/*"]

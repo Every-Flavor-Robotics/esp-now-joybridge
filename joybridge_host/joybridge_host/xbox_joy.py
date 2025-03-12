@@ -1,6 +1,6 @@
 import struct
 
-import pygame
+pygame = None
 
 
 class XboxController:
@@ -9,6 +9,10 @@ class XboxController:
     """
 
     def __init__(self, joystick_number=0):
+        # Import pygame
+        global pygame
+        # Set global pygame to the imported module
+        pygame = __import__("pygame")
 
         # 12 buttons
         self.a = False

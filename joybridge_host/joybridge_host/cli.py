@@ -5,7 +5,6 @@ from pathlib import Path
 
 import click
 import esptool
-import pygame
 import serial
 import serial.tools.list_ports
 

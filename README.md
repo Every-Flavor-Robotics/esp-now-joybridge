@@ -5,20 +5,6 @@
 </p>
 
 ---
-<h1 align="center">🎮 ESP-NOW JoyBridge 🎮</h1>
-
-<p align="center">
-  Wirelessly transmit joystick commands from your computer to ESP32-based projects using ESP-NOW.
-</p>
-
----
-<h1 align="center">🎮 ESP-NOW JoyBridge 🎮</h1>
-
-<p align="center">
-  <strong>Wirelessly transmit joystick commands from your computer to ESP32-based projects using ESP-NOW.</strong>
-</p>
-
----
 
 ## 📖 Table of Contents
 
@@ -27,13 +13,13 @@
 - [✨ Key Features](#-key-features)
 - [🛠️ Project Components](#️-project-components)
   - [ESP32 JoyBridge Firmware](#esp32-joybridge-firmware)
-  - [JoyBridge Host Client](#joybridge-host-client)
+  - [JoyBridge Host](#joybridge-host)
   - [JoyBridge Receiver Library](#joybridge-receiver-library)
 - [📦 Installation](#-installation)
   - [Installation via `efr` Tool](#installation-via-efr-tool)
   - [Manual Installation](#manual-installation)
     - [Flashing Firmware](#flashing-firmware)
-    - [Running Host Client](#running-host-client)
+    - [Running Host](#running-host)
   - [Setup JoyBridge Receiver Library](#setup-joybridge-receiver-library)
   - [Example Usage](#example-usage)
 
@@ -59,7 +45,7 @@ JoyBridge consists of three main components:
 - Supports up to 10 simultaneous device connections (configurable in firmware).
 - Optimized for the [WaveShare ESP32-S3 1.47-inch Display Development Board](https://www.waveshare.com/esp32-s3-lcd-1.47.htm), but compatible with any ESP32-S3 device (LED indicators may differ).
 
-### JoyBridge Host Client
+### JoyBridge Host
 - Python application using `pygame` to capture joystick input.
 - Sends joystick data to the ESP32 bridge via serial.
 - The `--service-name` option specifies the unique ESP-NOW service name. Connected devices use this name to discover and join the JoyBridge data stream. Customizing this helps avoid conflicts when running multiple bridges simultaneously. Default service name: `JoystickService`.
@@ -86,7 +72,7 @@ Flash firmware to your ESP32:
 efr joybridge flash
 ```
 
-Run the JoyBridge Host Client (optionally specifying your service name):
+Run the JoyBridge Host (optionally specifying your service name):
 
 ```bash
 efr joybridge go --service-name MyJoystickService
@@ -105,7 +91,7 @@ git clone https://github.com/Every-Flavor-Robotics/esp-now-joybridge.git
 The repository includes:
 
 - `joybridge_firmware`: Firmware for the ESP32 JoyBridge.
-- `joybridge_host`: Python host client.
+- `joybridge_host`: Python Host.
 
 #### Flashing Firmware
 
@@ -118,9 +104,9 @@ uv run main.py flash
 
 Alternatively, manually flash using PlatformIO in the `joybridge_firmware` directory.
 
-#### Running Host Client
+#### Running Host
 
-Run the JoyBridge Host Client, optionally specifying a custom service name:
+Run the JoyBridge Host, optionally specifying a custom service name:
 
 ```bash
 uv run main.py --service-name MyJoystickService
@@ -182,4 +168,3 @@ void loop()
   delay(100);
 }
 ```
-

@@ -11,3 +11,6 @@ dependencies = [
     "pygame>=2.6.1",
     "pyserial>=3.5",
 ]
+
+[project.entry-points]
+efr.plugins = { joybridge = "joybridge.main:cli" }

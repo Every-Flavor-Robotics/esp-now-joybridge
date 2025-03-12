@@ -159,11 +159,11 @@ def run_communication_loop(controller, serial_port, service_name):
 
 
 @click.group()
-def cli():
+def joybridge():
     pass
 
 
-@cli.command()
+@joybridge.command()
 @click.option(
     "--serial-port",
     default=DEFAULT_SERIAL_PORT,
@@ -185,7 +185,7 @@ def main(serial_port, service_name):
             break
 
 
-@cli.command(name="flash")
+@joybridge.command(name="flash")
 @click.option(
     "--firmware-dir",
     default="assets/firmware",
@@ -270,8 +270,5 @@ def flash_firmware(
     esptool.main(args)
 
 
-cli.add_command(main)
-cli.add_command(flash_firmware)
-
 if __name__ == "__main__":
-    cli()
+    joybridge()

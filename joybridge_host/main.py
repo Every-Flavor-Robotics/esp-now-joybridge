@@ -1,13 +1,14 @@
+import platform
 import struct
 import time
-import platform
 from pathlib import Path
 
-import esptool
 import click
+import esptool
 import pygame
 import serial
 import serial.tools.list_ports
+
 from xbox_joy import XboxController
 
 
@@ -37,15 +38,19 @@ else:
     else:
         DEFAULT_SERIAL_PORT = "/dev/ttyACM0"
 
-# Initialize PyGame for joystick input
-pygame.init()
-pygame.joystick.init()
 
-if pygame.joystick.get_count() == 0:
-    raise Exception("No joystick detected")
+def init_pygame():
+    # Initialize PyGame for joystick input
+    pygame.init()
+    pygame.joystick.init()
 
-joystick = pygame.joystick.Joystick(0)
-joystick.init()
+    if pygame.joystick.get_count() == 0:
+        raise Exception("No joystick detected")
+
+    joystick = pygame.joystick.Joystick(0)
+    joystick.init()
+
+    return joystick
 
 
 def get_init_message(service_name):
@@ -153,7 +158,12 @@ def run_communication_loop(controller, serial_port, service_name):
         raise
 
 
-@click.command()
+@click.group()
+def cli():
+    pass
+
+
+@cli.command()
 @click.option(
     "--serial-port",
     default=DEFAULT_SERIAL_PORT,
@@ -175,7 +185,7 @@ def main(serial_port, service_name):
             break
 
 
-@click.command(name="flash")
+@cli.command(name="flash")
 @click.option(
     "--firmware-dir",
     default="assets/firmware",
@@ -260,5 +270,8 @@ def flash_firmware(
     esptool.main(args)
 
 
+cli.add_command(main)
+cli.add_command(flash_firmware)
+
 if __name__ == "__main__":
-    main()
+    cli()

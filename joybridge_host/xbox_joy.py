@@ -40,6 +40,12 @@ class XboxController:
         self.right_x = 0.0
         self.right_y = 0.0
 
+        pygame.init()
+        pygame.joystick.init()
+
+        if pygame.joystick.get_count() == 0:
+            raise Exception("No joystick detected")
+
         # Initialize the joystick
         self.joystick_number = joystick_number
         self.joystick = pygame.joystick.Joystick(joystick_number)

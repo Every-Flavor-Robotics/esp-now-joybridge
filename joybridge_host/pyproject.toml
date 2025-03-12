@@ -1,5 +1,5 @@
 [project]
-name = "esp-now-transponder-python"
+name = "joybridge-host"
 version = "0.1.0"
 description = "Python interface for using a USB dongle as an ESP-NOW transponder"
 readme = "README.md"

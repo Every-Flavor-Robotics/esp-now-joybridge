@@ -1,7 +1,9 @@
 import struct
 import time
 import platform
+from pathlib import Path
 
+import esptool
 import click
 import pygame
 import serial
@@ -171,6 +173,91 @@ def main(serial_port, service_name):
             time.sleep(2)
         except KeyboardInterrupt:
             break
+
+
+@click.command(name="flash")
+@click.option(
+    "--firmware-dir",
+    default="assets/firmware",
+    help="Directory containing the firmware binary files",
+)
+@click.option(
+    "--port",
+    default=DEFAULT_SERIAL_PORT,
+    help="Serial port to use for flashing (e.g., /dev/ttyACM0 or COM3)",
+)
+def flash_firmware(
+    firmware_dir,
+    port="/dev/ttyS0",
+    baud="460800",
+):
+    """
+    Flash an ESP32-S3 with multiple binary files (bootloader, partition table,
+    boot_app0, and main firmware) using esptool, similar to PlatformIO's command:
+
+      esptool.py
+          --chip esp32s3
+          --port /dev/ttyACM1
+          --baud 460800
+          --before default_reset
+          --after hard_reset
+          write_flash -z --flash_mode dio
+          --flash_freq 80m
+          --flash_size detect
+          0x0000 bootloader.bin
+          0x8000 partitions.bin
+          0xe000 boot_app0.bin
+          0x10000 firmware.bin
+
+    :param port: Serial port to use (e.g. "/dev/ttyACM1", "/dev/ttyUSB0", etc.)
+    :param baud: Baud rate for flashing
+    :param bootloader: Path to the bootloader.bin
+    :param partitions: Path to the partitions.bin
+    :param boot_app0: Path to the boot_app0.bin
+    :param firmware: Path to the main firmware .bin
+    """
+
+    # Paths to the binary files
+    # Check that fimrware_dir exists
+    firmware_dir = Path(firmware_dir)
+    assert firmware_dir.exists(), f"Directory {firmware_dir} does not exist."
+
+    bootloader = firmware_dir / "bootloader.bin"
+    partitions = firmware_dir / "partitions.bin"
+    boot_app0 = firmware_dir / "boot_app0.bin"
+    firmware = firmware_dir / "firmware.bin"
+
+    args = [
+        "--chip",
+        "esp32s3",
+        "--port",
+        port,
+        "--baud",
+        baud,
+        "--before",
+        "default_reset",
+        "--after",
+        "hard_reset",
+        "write_flash",
+        "-z",
+        "--flash_mode",
+        "dio",
+        "--flash_freq",
+        "80m",
+        "--flash_size",
+        "detect",
+        # Offsets + file paths, as strings
+        "0x0000",
+        str(bootloader),
+        "0x8000",
+        str(partitions),
+        "0xe000",
+        str(boot_app0),
+        "0x10000",
+        str(firmware),
+    ]
+
+    esptool.main(args)
 
 
 if __name__ == "__main__":

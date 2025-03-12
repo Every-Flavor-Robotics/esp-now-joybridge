@@ -169,12 +169,12 @@ def joybridge(ctx):
     A tool for using an ESP32-S3 as an ESP-NOW transponder to relay joystick input to other ESP32 devices.
 
     Available Commands:
-      main      Run the JoyBridge host to send joystick data
+      start      Run the JoyBridge host to send joystick data
       flash     Flash the ESP32-S3 with the JoyBridge firmware
 
     Example Usage:
       efr joybridge flash
-      efr joybridge main
+      efr joybridge start
     """
     if ctx.invoked_subcommand is None:
         click.secho("\n🎮  JoyBridge Host 🎮", fg="magenta", bold=True)
@@ -191,7 +191,7 @@ def joybridge(ctx):
         click.echo()
 
         click.secho("2️⃣  Run the JoyBridge host to send joystick data:", fg="yellow")
-        click.secho("    efr joybridge main", fg="green")
+        click.secho("    efr joybridge start", fg="green")
         click.echo()
 
         click.secho("📌 Notes:", fg="cyan", bold=True)
@@ -219,7 +219,7 @@ def joybridge(ctx):
 
         click.secho("🛠️  Available Commands:", fg="cyan", bold=True)
         click.secho(
-            "  main      Run the JoyBridge host to send joystick data", fg="green"
+            "  start      Run the JoyBridge host to send joystick data", fg="green"
         )
         click.secho(
             "  flash     Flash the ESP32-S3 with the JoyBridge firmware", fg="green"
@@ -230,7 +230,7 @@ def joybridge(ctx):
         ctx.exit(0)
 
 
-@joybridge.command()
+@joybridge.command(name="start")
 @click.option(
     "--serial-port",
     default=DEFAULT_SERIAL_PORT,

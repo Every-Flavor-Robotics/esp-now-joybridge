@@ -13,4 +13,4 @@ dependencies = [
 ]
 
 [project.entry-points."efr.plugins"]
-joybridge = "joybridge.cli:joybridge"
+joybridge = "joybridge_host.cli:joybridge"

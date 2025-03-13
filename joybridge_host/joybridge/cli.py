@@ -226,7 +226,7 @@ def joybridge(ctx):
         )
         click.echo()
 
-        click.secho("🎮 Happy gaming! 🕹️", fg="magenta", bold=True)
+        click.secho("🎮 Happy gaming nerds! 🕹️", fg="magenta", bold=True)
         ctx.exit(0)
 
 
